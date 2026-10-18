@@ -152,23 +152,18 @@ export default function QuotationsPage() {
             setPage(1);
           }}
           containerClassName="sm:max-w-md"
-          className="glass"
         />
         <SelectField
           aria-label="Filter by status"
           icon={<Filter size={16} />}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={setStatusFilter}
           containerClassName="sm:w-52"
-          className="glass"
-        >
-          <option value="all">All statuses</option>
-          {QUOTATION_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusStyles[s].label}
-            </option>
-          ))}
-        </SelectField>
+          options={[
+            { value: 'all', label: 'All statuses' },
+            ...QUOTATION_STATUSES.map((s) => ({ value: s, label: statusStyles[s].label, dot: statusStyles[s].dot })),
+          ]}
+        />
       </div>
 
       <Card flush className="overflow-hidden">

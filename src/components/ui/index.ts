@@ -8,7 +8,9 @@ export type { InputFieldProps } from './InputField';
 export { TextAreaField } from './TextAreaField';
 export type { TextAreaFieldProps } from './TextAreaField';
 export { SelectField } from './SelectField';
-export type { SelectFieldProps } from './SelectField';
+export type { SelectFieldProps, SelectOption } from './SelectField';
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
 

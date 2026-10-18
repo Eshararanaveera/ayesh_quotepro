@@ -38,6 +38,8 @@ export interface QuotationItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Optional link to a product photo, shown as a small picture on the quotation. */
+  imageUrl?: string;
 }
 
 export type DiscountType = 'percentage' | 'fixed';

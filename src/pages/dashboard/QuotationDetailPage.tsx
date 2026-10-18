@@ -11,6 +11,7 @@ import { useAppData } from '../../hooks/useAppData';
 import { useSettings } from '../../hooks/useSettings';
 import { amountToWords, formatCurrency, formatNumber } from '../../utils/formatters';
 import { lineTotal } from '../../utils/calculations';
+import { ItemThumbnail } from '../../features/quotations/ItemImage';
 import { formatDate } from '../../utils/date';
 import type { QuotationStatus } from '../../types/quotation';
 
@@ -166,7 +167,12 @@ export default function QuotationDetailPage() {
               {quote.items.map((item, i) => (
                 <tr key={item.id}>
                   <td className="py-3.5 text-center text-slate-400">{i + 1}</td>
-                  <td className="py-3.5 pr-4 font-medium text-slate-900">{item.description}</td>
+                  <td className="py-3.5 pr-4 font-medium text-slate-900">
+                    <div className="flex items-center gap-3">
+                      <ItemThumbnail url={item.imageUrl} alt={item.description} eager className="h-12 w-12 print:h-11 print:w-11" />
+                      <span>{item.description}</span>
+                    </div>
+                  </td>
                   <td className="py-3.5 text-center text-slate-700">{formatNumber(item.quantity)}</td>
                   <td className="py-3.5 text-right text-slate-700">{formatCurrency(item.unitPrice, { symbol: '' })}</td>
                   <td className="py-3.5 text-right font-medium text-slate-900">{formatCurrency(lineTotal(item), { symbol: '' })}</td>

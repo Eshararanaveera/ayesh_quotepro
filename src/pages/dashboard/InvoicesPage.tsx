@@ -58,16 +58,13 @@ export default function InvoicesPage() {
           aria-label="Filter by status"
           icon={<Filter size={16} />}
           value={status}
-          onChange={(e) => setStatus(e.target.value as InvoiceStatus | 'all')}
+          onChange={(v) => setStatus(v as InvoiceStatus | 'all')}
           containerClassName="sm:w-48"
-        >
-          <option value="all">All statuses</option>
-          {INVOICE_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusStyles[s].label}
-            </option>
-          ))}
-        </SelectField>
+          options={[
+            { value: 'all', label: 'All statuses' },
+            ...INVOICE_STATUSES.map((s) => ({ value: s, label: statusStyles[s].label, dot: statusStyles[s].dot })),
+          ]}
+        />
       </div>
 
       <Card flush className="overflow-hidden">

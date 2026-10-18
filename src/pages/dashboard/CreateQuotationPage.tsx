@@ -7,11 +7,13 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { InputField } from '../../components/ui/InputField';
 import { SelectField } from '../../components/ui/SelectField';
+import { DatePicker } from '../../components/ui/DatePicker';
 import { TextAreaField } from '../../components/ui/TextAreaField';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { buttonVariants } from '../../components/ui/button-variants';
 import { ClientFormModal } from '../../features/customers/ClientFormModal';
+import { ItemImagePicker } from '../../features/quotations/ItemImage';
 import { useAppData } from '../../hooks/useAppData';
 import { useSettings } from '../../hooks/useSettings';
 import { useQuotationCalculations } from '../../hooks/useQuotationCalculations';
@@ -28,6 +30,7 @@ interface ItemRow {
   description: string;
   quantity: string;
   unitPrice: string;
+  imageUrl: string;
 }
 
 interface FormState {
@@ -50,14 +53,14 @@ interface FormErrors {
   discount?: string;
 }
 
-const newRow = (): ItemRow => ({ id: createId(), description: '', quantity: '1', unitPrice: '' });
+const newRow = (): ItemRow => ({ id: createId(), description: '', quantity: '1', unitPrice: '', imageUrl: '' });
 
 function fromQuotation(q: Quotation): FormState {
   return {
     clientId: q.clientId,
     issueDate: q.issueDate,
     validityDays: String(q.validityDays),
-    items: q.items.map((i) => ({ id: i.id, description: i.description, quantity: String(i.quantity), unitPrice: String(i.unitPrice) })),
+    items: q.items.map((i) => ({ id: i.id, description: i.description, quantity: String(i.quantity), unitPrice: String(i.unitPrice), imageUrl: i.imageUrl ?? '' })),
     discountType: q.discountType,
     discountValue: q.discountValue ? String(q.discountValue) : '',
     tax: { ...q.tax },
@@ -174,6 +177,7 @@ export default function CreateQuotationPage() {
         description: item.description.trim(),
         quantity: toNumber(item.quantity),
         unitPrice: toNumber(item.unitPrice),
+        ...(item.imageUrl.trim() ? { imageUrl: item.imageUrl.trim() } : {}),
       })),
       discountType: form.discountType,
       discountValue: toNumber(form.discountValue),
@@ -268,18 +272,14 @@ export default function CreateQuotationPage() {
                     label="Select client"
                     required
                     value={form.clientId}
-                    onChange={(e) => update({ clientId: e.target.value })}
+                    onChange={(clientId) => update({ clientId })}
                     error={errors.clientId}
-                  >
-                    <option value="">Choose a client…</option>
-                    {[...clients]
+                    placeholder="Choose a client…"
+                    searchable
+                    options={[...clients]
                       .sort((a, b) => a.companyName.localeCompare(b.companyName))
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.companyName}
-                        </option>
-                      ))}
-                  </SelectField>
+                      .map((c) => ({ value: c.id, label: c.companyName, description: [c.contactName, c.city].filter(Boolean).join(' · ') }))}
+                  />
                   <Button
                     variant="outline"
                     size="icon"
@@ -328,13 +328,12 @@ export default function CreateQuotationPage() {
                   disabled
                   className="font-mono"
                 />
-                <div className="grid grid-cols-2 gap-4">
-                  <InputField
+                <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-3">
+                  <DatePicker
                     label="Issue date"
-                    type="date"
                     required
                     value={form.issueDate}
-                    onChange={(e) => update({ issueDate: e.target.value })}
+                    onChange={(issueDate) => update({ issueDate })}
                     error={errors.issueDate}
                   />
                   <InputField
@@ -361,7 +360,7 @@ export default function CreateQuotationPage() {
           {/* Line items */}
           <Card flush className="overflow-hidden">
             <div className="flex flex-col gap-4 border-b border-slate-200/70 p-5 sm:flex-row sm:items-center sm:justify-between md:px-6 dark:border-zinc-800/70">
-              <CardHeader title="Items & Services" description="Description, quantity and unit price in LKR" icon={<Package size={18} />} />
+              <CardHeader title="Items & Services" description="Description, quantity and unit price in LKR. Click the photo box to add a picture." icon={<Package size={18} />} />
               <Button variant="secondary" size="sm" leftIcon={<Plus size={16} />} onClick={addItem} className="h-9 self-start sm:self-auto">
                 Add Item
               </Button>
@@ -386,16 +385,24 @@ export default function CreateQuotationPage() {
                     className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-3 px-5 py-4 md:grid-cols-[1.5rem_minmax(0,1fr)_5rem_8.5rem_8rem_2.25rem] md:items-start md:px-6"
                   >
                     <span className="hidden pt-2.5 text-sm font-medium text-slate-400 md:block">{index + 1}</span>
-                    <InputField
-                      aria-label={`Item ${index + 1} description`}
-                      placeholder="e.g. Website design and development"
-                      value={item.description}
-                      onChange={(ev) => updateItem(item.id, 'description', ev.target.value)}
-                      error={e.description}
-                      containerClassName="col-span-3 md:col-span-1"
-                      label="Description"
-                      labelClassName="md:sr-only"
-                    />
+                    <div className="col-span-3 flex items-start gap-2 md:col-span-1">
+                      <div className={cn('shrink-0', 'pt-[26px] md:pt-0')}>
+                        <ItemImagePicker
+                          value={item.imageUrl}
+                          onChange={(url) => updateItem(item.id, 'imageUrl', url)}
+                          itemLabel={`item ${index + 1}`}
+                        />
+                      </div>
+                      <InputField
+                        aria-label={`Item ${index + 1} description`}
+                        placeholder="e.g. Website design and development"
+                        value={item.description}
+                        onChange={(ev) => updateItem(item.id, 'description', ev.target.value)}
+                        error={e.description}
+                        label="Description"
+                        labelClassName="md:sr-only"
+                      />
+                    </div>
                     <InputField
                       aria-label={`Item ${index + 1} quantity`}
                       type="number"

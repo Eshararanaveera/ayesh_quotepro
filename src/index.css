@@ -104,6 +104,12 @@ input,
   font-variant-numeric: tabular-nums;
 }
 
+/* Any remaining native dropdown lists follow the theme too */
+select option {
+  background-color: rgb(var(--page-bg));
+  color: rgb(var(--page-fg));
+}
+
 ::selection {
   background-color: rgb(var(--brand-500) / 0.25);
 }

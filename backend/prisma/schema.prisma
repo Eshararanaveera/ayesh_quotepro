@@ -1,0 +1,223 @@
+// QuotePro database schema — MySQL 8 (also works with MariaDB 10.6+)
+//
+// Notes for MySQL:
+//  • Text columns are given explicit sizes (VarChar / Text) to keep rows within MySQL limits.
+//  • TEXT columns can't have default values in MySQL, so the app always fills them in.
+//  • Searches are case-insensitive automatically with the default utf8mb4 collation.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+// Lower-case values match the strings the frontend already uses.
+
+enum UserRole {
+  admin
+  staff
+}
+
+enum QuotationStatus {
+  draft
+  pending
+  approved
+  rejected
+  expired
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+/// "overdue" is not stored: it's an unpaid invoice whose due date has passed.
+enum InvoiceStatus {
+  paid
+  unpaid
+}
+
+// ───────────────────────────── Users ─────────────────────────────
+
+model User {
+  id                 String   @id @default(cuid()) @db.VarChar(30)
+  email              String   @unique @db.VarChar(191)
+  name               String   @db.VarChar(100)
+  passwordHash       String   @db.VarChar(100)
+  role               UserRole @default(admin)
+  /// True until the seeded default password is changed.
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  quotations Quotation[]
+
+  @@map("users")
+}
+
+// ──────────────────────────── Clients ────────────────────────────
+
+model Client {
+  id          String   @id @default(cuid()) @db.VarChar(30)
+  companyName String   @db.VarChar(200)
+  contactName String   @db.VarChar(200)
+  email       String   @db.VarChar(191)
+  phone       String   @default("") @db.VarChar(40)
+  address     String   @default("") @db.VarChar(500)
+  city        String   @default("") @db.VarChar(100)
+  /// TIN or VAT registration number.
+  taxId       String?  @db.VarChar(50)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quotations Quotation[]
+  invoices   Invoice[]
+
+  @@index([companyName])
+  @@map("clients")
+}
+
+// ─────────────────────────── Quotations ──────────────────────────
+
+model Quotation {
+  id          String          @id @default(cuid()) @db.VarChar(30)
+  quoteNumber String          @unique @db.VarChar(30)
+  status      QuotationStatus @default(draft)
+
+  /// Null if the client is later deleted; the copy below keeps the document intact.
+  clientId String? @db.VarChar(30)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  // Client details copied when the quotation is saved, so issued documents never change.
+  clientCompanyName String  @db.VarChar(200)
+  clientContactName String  @db.VarChar(200)
+  clientEmail       String  @db.VarChar(191)
+  clientPhone       String  @default("") @db.VarChar(40)
+  clientAddress     String  @default("") @db.VarChar(500)
+  clientCity        String  @default("") @db.VarChar(100)
+  clientTaxId       String? @db.VarChar(50)
+
+  issueDate    DateTime @db.Date
+  validUntil   DateTime @db.Date
+  validityDays Int
+
+  discountType  DiscountType @default(percentage)
+  discountValue Decimal      @default(0) @db.Decimal(14, 2)
+
+  vatEnabled  Boolean @default(true)
+  vatRate     Decimal @default(18) @db.Decimal(5, 2)
+  ssclEnabled Boolean @default(true)
+  ssclRate    Decimal @default(2.5) @db.Decimal(5, 2)
+
+  // Totals are always calculated on the server (see src/lib/calculations.ts).
+  subtotal       Decimal @db.Decimal(14, 2)
+  discountAmount Decimal @db.Decimal(14, 2)
+  netAmount      Decimal @db.Decimal(14, 2)
+  ssclAmount     Decimal @db.Decimal(14, 2)
+  vatAmount      Decimal @db.Decimal(14, 2)
+  grandTotal     Decimal @db.Decimal(14, 2)
+
+  /// Terms & notes (always set by the app; TEXT columns can't have defaults in MySQL).
+  notes String @db.Text
+
+  createdById String?  @db.VarChar(30)
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items    QuotationItem[]
+  invoices Invoice[]
+
+  @@index([status])
+  @@index([issueDate])
+  @@index([clientId])
+  @@index([createdById])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid()) @db.VarChar(30)
+  quotationId String    @db.VarChar(30)
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  /// Display order, starting at 0.
+  position    Int
+  description String    @db.VarChar(1000)
+  quantity    Decimal   @db.Decimal(12, 3)
+  unitPrice   Decimal   @db.Decimal(14, 2)
+  lineTotal   Decimal   @db.Decimal(14, 2)
+  /// Link or small embedded (data:) image shown on the printed quotation.
+  imageUrl    String?   @db.MediumText
+
+  @@index([quotationId, position])
+  @@map("quotation_items")
+}
+
+// ──────────────────────────── Invoices ───────────────────────────
+
+model Invoice {
+  id            String        @id @default(cuid()) @db.VarChar(30)
+  invoiceNumber String        @unique @db.VarChar(30)
+  quotationId   String        @db.VarChar(30)
+  /// Restrict: a quotation that has invoices can't be deleted by accident.
+  quotation     Quotation     @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+  clientId      String?       @db.VarChar(30)
+  client        Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientName    String        @db.VarChar(200)
+  amount        Decimal       @db.Decimal(14, 2)
+  status        InvoiceStatus @default(unpaid)
+  issueDate     DateTime      @db.Date
+  dueDate       DateTime      @db.Date
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status])
+  @@index([quotationId])
+  @@index([clientId])
+  @@map("invoices")
+}
+
+// ──────────────────────────── Settings ───────────────────────────
+
+/// One row (id = 1) holding company profile, default taxes and quotation defaults.
+model Settings {
+  id Int @id @default(1)
+
+  companyName     String  @default("My Company (Pvt) Ltd") @db.VarChar(200)
+  /// Logo as a data: URL (up to ~700 KB).
+  companyLogo     String? @db.MediumText
+  companyAddress  String  @default("") @db.VarChar(500)
+  companyPhone    String  @default("") @db.VarChar(40)
+  companyEmail    String  @default("") @db.VarChar(191)
+  companyWebsite  String  @default("") @db.VarChar(200)
+  companyTin      String  @default("") @db.VarChar(50)
+  companyVatRegNo String  @default("") @db.VarChar(50)
+
+  vatEnabled  Boolean @default(true)
+  vatRate     Decimal @default(18) @db.Decimal(5, 2)
+  ssclEnabled Boolean @default(true)
+  ssclRate    Decimal @default(2.5) @db.Decimal(5, 2)
+
+  quotePrefix       String @default("QT") @db.VarChar(10)
+  quoteValidityDays Int    @default(14)
+  /// Default terms (always set by the app; TEXT columns can't have defaults in MySQL).
+  quoteNotes        String @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+/// Running counters for document numbers, e.g. key "QT-2026" → last = 12.
+/// Incremented with INSERT … ON DUPLICATE KEY UPDATE inside a transaction,
+/// so two users can never get the same number.
+model DocumentSequence {
+  key  String @id @db.VarChar(30)
+  last Int    @default(0)
+
+  @@map("document_sequences")
+}
